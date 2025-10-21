@@ -1,7 +1,23 @@
 <script setup lang="ts">
-    import ChatPanel from '@/components/chat/ChatPanel.vue';
-    import RoomsList from '@/components/chat/RoomsList.vue';
-    import AppLayout from '@/layouts/AppLayout.vue';
+import { ref, onMounted } from 'vue';
+import ChatPanel from '@/components/chat/ChatPanel.vue';
+import RoomsList from '@/components/chat/RoomsList.vue';
+import AppLayout from '@/layouts/AppLayout.vue';
+
+const ROOM_KEY = 'selectedRoomId';
+const selectedRoomId = ref(1); // fallback default
+
+onMounted(() => {
+    const stored = localStorage.getItem(ROOM_KEY);
+    if (stored) {
+        selectedRoomId.value = Number(stored);
+    }
+});
+
+function handleRoomSelect(roomId: number) {
+    selectedRoomId.value = roomId;
+    localStorage.setItem(ROOM_KEY, String(roomId));
+}
 </script>
 
 <style scoped>
@@ -23,10 +39,10 @@
         <template #default>
             <div class="chat-app">
                 <div class="chat-sidebar">
-                    <RoomsList />
+                    <RoomsList @select="handleRoomSelect" />
                 </div>
                 <div class="chat-main">
-                    <ChatPanel />
+                    <ChatPanel :room-id="selectedRoomId" />
                 </div>
             </div>
         </template>

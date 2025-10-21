@@ -35,4 +35,15 @@ class Message extends Model
     {
         return $this->belongsTo(User::class, 'recipient_id');
     }
+
+    // Encrypt content before saving, decrypt when reading
+    public function setContentAttribute($value)
+    {
+        $this->attributes['content'] = encrypt($value);
+    }
+
+    public function getContentAttribute($value)
+    {
+        return decrypt($value);
+    }
 }

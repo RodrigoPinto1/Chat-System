@@ -20,46 +20,73 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch, onUnmounted } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import MessageItem from './MessageItem.vue';
 
+const props = defineProps<{ roomId: number }>();
 const messages = ref([] as any[]);
 const text = ref('');
 
 // Use Inertia shared props to get the authenticated user (falls back to demo id)
 const page: any = usePage();
 const authUser: any = page.props.value?.auth?.user ?? null;
-const currentUserId = authUser?.id ?? 999;
+const currentUserId = ref(String(authUser?.id ?? 999));
 const currentUserName = authUser?.name ?? 'You';
 const defaultAvatar = 'https://assets.edlin.app/images/rossedlin/03/rossedlin-03-100.jpg';
 
 function isMine(m: any) {
-    // message may contain user.id or user_id or be marked sender_id — check common names
     const senderId = m.user?.id ?? m.user_id ?? m.sender_id ?? null;
     if (senderId === null || senderId === undefined) return false;
-    // Normalize types (string) to avoid number/string mismatch when comparing IDs
-    return String(senderId) === String(currentUserId);
+    return String(senderId) === currentUserId.value;
 }
 
+async function fetchMessages(roomId: number) {
+    if (!roomId) return;
+    const res = await fetch(`/messages?room_id=${roomId}`, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+    });
+    if (res.ok) {
+        const data = await res.json();
+        messages.value = data.messages;
+        // Use backend-provided currentUserId for robust side detection
+        if (data.currentUserId) {
+            currentUserId.value = String(data.currentUserId);
+        }
+    }
+}
+
+let intervalId: number | undefined;
+
 onMounted(() => {
-    messages.value = [
-        { id: 1, user: { id: 1, name: 'Admin User' }, content: 'Bem-vindo ao chat!' },
-        { id: 2, user: { id: 2, name: 'Test User' }, content: 'Olá a todos' },
-        // message from current user demo
-        { id: 3, user: { id: currentUserId, name: currentUserName }, content: 'Este é o meu' },
-    ];
+    if (props.roomId) {
+        fetchMessages(props.roomId);
+    }
+    intervalId = window.setInterval(() => {
+        fetchMessages(props.roomId);
+    }, 2000);
+});
+
+onUnmounted(() => {
+    if (intervalId) {
+        clearInterval(intervalId);
+    }
+});
+
+watch(() => props.roomId, (newRoomId) => {
+    fetchMessages(newRoomId);
 });
 
 async function send() {
     if (!text.value.trim()) return;
 
-    const payload = { content: text.value };
+    const payload = { content: text.value, room_id: props.roomId };
 
     // optimistic id in case network fails
     const optimistic = {
         id: Date.now(),
-        user: { id: currentUserId, name: currentUserName },
+        user: { id: currentUserId.value, name: currentUserName },
         content: text.value,
         _pending: true,
         _failed: false,

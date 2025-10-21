@@ -21,12 +21,12 @@
 import Avatar from './Avatar.vue';
 import MessageBubble from './MessageBubble.vue';
 
-const props = defineProps<{ message: any; currentUserId: string | number; currentUserName?: string }>();
+const props = defineProps<{ message: any; currentUserId: string; currentUserName?: string }>();
 const { message, currentUserId, currentUserName } = props as any;
 
-// Decide side: pending/forceMine or isMine
+// Decide side: always compare senderId and currentUserId as strings
 const senderId = message?.user?.id ?? message?.user_id ?? message?.sender_id ?? null;
-const isRight = message?._pending === true || message?._forceMine === true || (senderId !== null && String(senderId) === String(currentUserId));
+const isRight = String(senderId) === currentUserId || message?._pending === true || message?._forceMine === true;
 </script>
 
 <style scoped>

@@ -17,10 +17,26 @@ class MessageController extends Controller
             ->orderBy('created_at', 'asc')
             ->get();
 
-        // Return messages and current user id for reliable frontend comparison
+        // Return messages, current user id, and admin status for reliable frontend comparison
+        $isAdmin = $user && $roomId ? $user->isAdminInRoom($roomId) : false;
+        // Always return a clean array of messages with type
+        $messagesArr = $messages->map(function ($msg) {
+            return [
+                'id' => $msg->id,
+                'user' => [
+                    'id' => $msg->user->id ?? null,
+                    'name' => $msg->user->name ?? null,
+                    'avatar' => $msg->user->avatar ?? null,
+                ],
+                'content' => $msg->content,
+                'type' => $msg->type ?? null,
+                'created_at' => $msg->created_at,
+            ];
+        });
         return response()->json([
-            'messages' => $messages,
+            'messages' => $messagesArr,
             'currentUserId' => $user->id,
+            'isAdmin' => $isAdmin,
         ]);
     }
 
@@ -33,7 +49,17 @@ class MessageController extends Controller
         ]);
 
         // Always set user_id to the authenticated user
-        $data['user_id'] = $request->user()->id;
+        $user = $request->user();
+        $data['user_id'] = $user->id;
+
+        // Check if user is a member of the room
+        $roomId = $data['room_id'] ?? null;
+        if ($roomId) {
+            $isMember = $user->rooms()->where('rooms.id', $roomId)->exists();
+            if (!$isMember) {
+                return response()->json(['error' => 'Você não é membro desta sala.'], 403);
+            }
+        }
 
         $message = Message::create($data);
         $message->load('user');

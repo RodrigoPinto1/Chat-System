@@ -5,13 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Room;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Events\UserInvitedToRoom;
 
 class RoomController extends Controller
 {
     // List all rooms
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Room::all());
+        $user = $request->user();
+        // Show rooms where the user is a member (any role)
+        $rooms = Room::whereHas('users', function ($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })->get();
+        return response()->json($rooms);
     }
 
     // Create a new room
@@ -40,5 +46,36 @@ class RoomController extends Controller
     public function show(Room $room)
     {
         return response()->json($room);
+    }
+
+    // Get all members of a room with their roles
+    public function members(Room $room)
+    {
+        $members = $room->users()->get()->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'avatar' => $user->avatar,
+                'role' => $user->pivot->role,
+            ];
+        });
+        return response()->json($members);
+    }
+
+    // Invite a user to the room (admin/owner only)
+    public function invite(Request $request, Room $room)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+        ]);
+        $user = $request->user();
+        if (!$user->isAdminInRoom($room->id)) {
+            return response()->json(['error' => 'Only admins/owners can invite.'], 403);
+        }
+        $inviteeId = $request->input('user_id');
+        $room->users()->syncWithoutDetaching([$inviteeId => ['role' => 'member', 'joined_at' => now()]]);
+        // Fire broadcast event
+        event(new UserInvitedToRoom($room, $user, \App\Models\User::find($inviteeId)));
+        return response()->json(['invited' => true]);
     }
 }

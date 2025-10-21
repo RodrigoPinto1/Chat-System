@@ -15,6 +15,7 @@ class Message extends Model
         'recipient_id',
         'content',
         'meta',
+        'type',
     ];
 
     protected $casts = [

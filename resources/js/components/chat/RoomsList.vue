@@ -5,15 +5,22 @@
             <button class="btn btn-sm" @click="showForm = true">Nova</button>
         </div>
         <ul>
-            <li v-for="room in rooms" :key="room.id" class="border-b py-2 cursor-pointer" @click="$emit('select', room.id)">
+            <li v-for="room in rooms" :key="room.id" class="border-b py-2 cursor-pointer" @click="emit('select', room.id)">
                 <div class="flex items-center gap-3">
                     <img :src="room.avatar" class="h-10 w-10 rounded-full" />
                     <div>
                         <div class="font-medium">{{ room.name }}</div>
-                        <div class="text-sm text-muted">
-                            {{ room.reference }}
-                        </div>
+                        <div class="text-sm text-muted">{{ room.reference }}</div>
                     </div>
+                    <button class="btn btn-xs ml-2" @click.stop="openInvite(room.id)">Convidar</button>
+                </div>
+                <div v-if="showInviteForm && inviteRoomId === room.id" class="mt-2">
+                    <form @submit.prevent="submitInvite">
+                        <input v-model="inviteUserId" placeholder="ID do usuário" class="input input-bordered w-32 mr-2" />
+                        <button class="btn btn-xs btn-primary" type="submit">Enviar convite</button>
+                        <button class="btn btn-xs btn-secondary" type="button" @click="closeInvite">Cancelar</button>
+                        <span v-if="inviteError" class="text-red-500 ml-2">{{ inviteError }}</span>
+                    </form>
                 </div>
             </li>
         </ul>
@@ -46,12 +53,59 @@ const showForm = ref(false);
 const newRoom = ref({ name: '', reference: '', avatar: '' });
 const error = ref('');
 
+const showInviteForm = ref(false);
+const inviteRoomId = ref<number|null>(null);
+const inviteUserId = ref('');
+const inviteError = ref('');
+
+function openInvite(roomId: number) {
+    showInviteForm.value = true;
+    inviteRoomId.value = roomId;
+    inviteUserId.value = '';
+    inviteError.value = '';
+}
+function closeInvite() {
+    showInviteForm.value = false;
+    inviteRoomId.value = null;
+    inviteUserId.value = '';
+    inviteError.value = '';
+}
+
+async function submitInvite() {
+    inviteError.value = '';
+    if (!inviteRoomId.value || !inviteUserId.value) return;
+    try {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const res = await fetch(`/rooms/${inviteRoomId.value}/invite`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token,
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({ user_id: inviteUserId.value }),
+        });
+        if (!res.ok) {
+            const body = await res.json();
+            inviteError.value = body.error || 'Erro ao convidar.';
+            return;
+        }
+        closeInvite();
+    } catch (e) {
+        inviteError.value = 'Erro de rede.';
+    }
+}
+
 async function fetchRooms() {
     const res = await fetch('/rooms', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
     if (res.ok) {
         rooms.value = await res.json();
+        emit('rooms-loaded', rooms.value);
     }
 }
+
+const emit = defineEmits(['select', 'rooms-loaded']);
 
 onMounted(fetchRooms);
 

@@ -1,18 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 import ChatPanel from '@/components/chat/ChatPanel.vue';
 import RoomsList from '@/components/chat/RoomsList.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 
 const ROOM_KEY = 'selectedRoomId';
-const selectedRoomId = ref(1); // fallback default
-
-onMounted(() => {
-    const stored = localStorage.getItem(ROOM_KEY);
-    if (stored) {
-        selectedRoomId.value = Number(stored);
-    }
-});
+const selectedRoomId = ref<number|null>(null); // null means no room selected
 
 function handleRoomSelect(roomId: number) {
     selectedRoomId.value = roomId;
@@ -42,7 +35,16 @@ function handleRoomSelect(roomId: number) {
                     <RoomsList @select="handleRoomSelect" />
                 </div>
                 <div class="chat-main">
-                    <ChatPanel :room-id="selectedRoomId" />
+                    <template v-if="selectedRoomId">
+                        <ChatPanel :room-id="selectedRoomId" />
+                    </template>
+                    <template v-else>
+                        <div class="flex flex-col items-center justify-center w-full h-full text-center p-12">
+                            <h1 class="text-4xl font-bold mb-4">Bem-vindo ao Chat!</h1>
+                            <p class="text-lg text-muted mb-6">Selecione uma sala à esquerda para começar a conversar.<br>Crie uma nova sala para iniciar um chat com seus amigos.</p>
+                            <img src="/favicon.svg" alt="Chat Hero" class="w-32 h-32 mb-6 opacity-80" />
+                        </div>
+                    </template>
                 </div>
             </div>
         </template>

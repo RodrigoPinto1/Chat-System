@@ -56,7 +56,7 @@ class User extends Authenticatable
     // Relations
     public function rooms()
     {
-        return $this->belongsToMany(Room::class)->withTimestamps()->withPivot(['role','joined_at']);
+        return $this->belongsToMany(Room::class)->withTimestamps()->withPivot(['role', 'joined_at']);
     }
 
     public function messages()
@@ -67,5 +67,17 @@ class User extends Authenticatable
     public function invitations()
     {
         return $this->hasMany(Invitation::class, 'invitee_id');
+    }
+
+    public function isAdminInRoom($roomId)
+    {
+        $pivot = $this->rooms()->where('rooms.id', $roomId)->first()?->pivot;
+        return $pivot && in_array($pivot->role, ['admin', 'owner']);
+    }
+
+    public function isOwnerInRoom($roomId)
+    {
+        $pivot = $this->rooms()->where('rooms.id', $roomId)->first()?->pivot;
+        return $pivot && $pivot->role === 'owner';
     }
 }

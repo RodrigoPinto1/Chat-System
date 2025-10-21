@@ -1,9 +1,17 @@
 
+
+
+
+
 <?php
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use App\Http\Controllers\PusherController;use App\Http\Controllers\RoomController;
+use App\Http\Controllers\PusherController;
+use App\Http\Controllers\RoomController;
+use App\Http\Controllers\MessageController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\MessageFileController;
 
 
 Route::get('/', function () {
@@ -27,13 +35,21 @@ Route::post('pusher/receive', [PusherController::class, 'receive'])->name('pushe
 
 // Room routes
 Route::get('rooms', [RoomController::class, 'index'])->middleware('auth')->name('rooms.index');
+
 Route::post('rooms', [RoomController::class, 'store'])->middleware('auth')->name('rooms.store');
+
 Route::post('rooms/{room}/join', [RoomController::class, 'join'])->middleware('auth')->name('rooms.join');
+
 Route::get('rooms/{room}', [RoomController::class, 'show'])->middleware('auth')->name('rooms.show');
+Route::get('rooms/{room}/members', [RoomController::class, 'members'])->middleware('auth')->name('rooms.members');
 
-// Message store route
-use App\Http\Controllers\MessageController;
+Route::post('rooms/{room}/invite', [RoomController::class, 'invite'])->middleware('auth')->name('rooms.invite');
 
+// File upload for chat messages
+Route::post('messages/file', [MessageFileController::class, 'store'])->middleware('auth')->name('messages.file');
+
+// User search route for invite/autocomplete
+Route::get('users/search', [UserController::class, 'search'])->middleware('auth')->name('users.search');
 
 Route::get('messages', [MessageController::class, 'index'])->middleware('auth')->name('messages.index');
 Route::post('messages', [MessageController::class, 'store'])->middleware('auth')->name('messages.store');

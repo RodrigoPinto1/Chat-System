@@ -14,23 +14,20 @@
                 <span v-if="inviteError" class="text-red-500 ml-2">{{ inviteError }}</span>
             </div>
         </div>
-        <div class="messages mb-4 flex-1 overflow-auto">
+        <div ref="messagesContainer" class="messages mb-4 flex-1 overflow-auto">
             <div v-for="m in messages" :key="m.id" class="mb-3">
                 <MessageItem :message="m" :current-user-id="currentUserId" :current-user-name="currentUserName" />
             </div>
         </div>
+        <!-- Floating button to jump to bottom when user is scrolled up -->
+        <button v-if="showScrollToBottom" @click="scrollToBottom(true)" class="scroll-bottom-btn" title="Ir para o final">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3.293 9.293a1 1 0 011.414 0L10 14.586l5.293-5.293a1 1 0 011.414 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+        </button>
         <form @submit.prevent="send">
-            <div v-if="filePreview || selectedFile" style="border: 2px solid red; background: #ffe;" class="mb-2 flex items-center gap-3 bg-gray-50 border rounded p-2">
-                <span style="color: red; font-weight: bold;"></span>
-                <template v-if="isImagePreview && filePreview">
-                    <img :src="filePreview" alt="preview" class="max-h-24 max-w-xs rounded border" />
-                </template>
-                <template v-else>
-                    <span class="text-gray-700">{{ selectedFile?.name }}</span>
-                </template>
-                <button type="button" class="ml-2 text-red-500 hover:text-red-700" @click="removeFilePreview" title="Remover arquivo">
-                    &times;
-                </button>
+            <div class="mb-2 w-full">
+                <FileUploader ref="fileUploader" :room-id="props.roomId" />
             </div>
             <div class="flex gap-2 items-center">
                 <input
@@ -38,8 +35,7 @@
                     class="flex-1 rounded border p-2"
                     placeholder="Escreve uma mensagem..."
                 />
-                <input ref="fileInput" type="file" class="hidden" @change="onFileChange" />
-                <button type="button" class="btn btn-ghost p-1" @click="triggerFileInput" title="Enviar arquivo ou imagem">
+                <button type="button" class="btn btn-ghost p-1" @click="triggerUploader" title="Enviar arquivo ou imagem">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-500 hover:text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l7.071-7.071a4 4 0 00-5.657-5.657l-7.071 7.07a6 6 0 108.485 8.486l6.364-6.364" />
                     </svg>
@@ -51,81 +47,12 @@
 </template>
 
 <script setup lang="ts">
-// --- File upload logic ---
-const fileInput = ref<HTMLInputElement | null>(null);
-const selectedFile = ref<File|null>(null);
-const filePreview = ref<string|null>(null);
-const isImagePreview = ref(false);
-
-function triggerFileInput() {
-    fileInput.value?.click();
-}
-
-async function onFileChange(e: Event) {
-    const target = e.target as HTMLInputElement;
-    if (target.files && target.files.length > 0) {
-        selectedFile.value = target.files[0];
-        console.log('[FilePreview] File selected:', selectedFile.value);
-        // Preview
-        if (selectedFile.value.type.startsWith('image/')) {
-            filePreview.value = URL.createObjectURL(selectedFile.value);
-            isImagePreview.value = true;
-            console.log('[FilePreview] Image preview URL:', filePreview.value);
-        } else {
-            filePreview.value = null;
-            isImagePreview.value = false;
-            console.log('[FilePreview] Not an image, file name:', selectedFile.value.name);
-        }
-    } else {
-        console.log('[FilePreview] No file selected');
-    }
-}
-
-function removeFilePreview() {
-    selectedFile.value = null;
-    filePreview.value = null;
-    isImagePreview.value = false;
-    if (fileInput.value) fileInput.value.value = '';
-}
-
-// Call this to actually send the file
-async function sendFile() {
-    if (!selectedFile.value || !props.roomId) return;
-    const formData = new FormData();
-    formData.append('file', selectedFile.value);
-    formData.append('room_id', String(props.roomId));
-    if (text.value && text.value.trim()) {
-        formData.append('meta', JSON.stringify({ text: text.value }));
-    }
-    try {
-        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-        const res = await fetch('/messages/file', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'X-CSRF-TOKEN': token,
-                'Accept': 'application/json',
-            },
-            body: formData,
-        });
-        if (!res.ok) {
-            const body = await res.text();
-            console.error('File upload failed', res.status, body);
-            return;
-        }
-        const saved = await res.json();
-        messages.value.push(saved);
-        removeFilePreview();
-        text.value = '';
-    } catch (e) {
-        console.error('File upload error', e);
-    }
-}
-import { onMounted, ref, watch, onUnmounted } from 'vue';
+import { onMounted, ref, watch, onUnmounted, nextTick } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import MessageItem from './MessageItem.vue';
 import UserSearch from './UserSearch.vue';
 import RoomMembers from './RoomMembers.vue';
+import FileUploader from './FileUploader.vue';
 
 const props = defineProps<{ roomId: number }>();
 const messages = ref([] as any[]);
@@ -200,16 +127,106 @@ async function fetchMessages(roomId: number) {
     });
     if (res.ok) {
         const data = await res.json();
-        messages.value = data.messages;
+        // preserve previous messages length to decide whether to auto-scroll
+        const prevLen = messages.value.length;
+        messages.value = data.messages || [];
         // Use backend-provided currentUserId for robust side detection
         if (data.currentUserId) {
             currentUserId.value = String(data.currentUserId);
         }
+        // Only auto-scroll when we had no messages (initial load) or when the user is already near the bottom
+        const wasEmpty = prevLen === 0;
+        if (wasEmpty) {
+            // initial load: allow a short initial phase where image loads can still auto-scroll
+            initialPhase.value = true;
+            if (initialPhaseTimeout) clearTimeout(initialPhaseTimeout);
+            initialPhaseTimeout = window.setTimeout(() => {
+                initialPhase.value = false;
+            }, 1500);
+            scrollToBottom();
+            showScrollToBottom.value = false;
+        } else if (isUserNearBottom()) {
+            // user is at bottom: keep them pinned
+            scrollToBottom();
+            showScrollToBottom.value = false;
+        } else {
+            // New messages arrived while user is reading older ones: do not force-scroll.
+            // Show the floating button so they can jump to the end when ready.
+            showScrollToBottom.value = true;
+        }
+        attachImageLoadHandlers();
     }
 }
 
 let intervalId: number | undefined;
+const messagesContainer = ref<HTMLElement | null>(null);
+// File uploader component is used for file selection, preview and upload
+const fileUploader = ref<any | null>(null);
+const showScrollToBottom = ref(false);
+// allow auto-scrolling only during the initial phase (to land at bottom),
+// afterwards the user is free to scroll without being pulled down.
+const initialPhase = ref(true);
+let initialPhaseTimeout: number | undefined;
 
+function triggerUploader() {
+    fileUploader.value?.trigger?.();
+}
+
+function scrollToBottom(smooth = false) {
+    nextTick(() => {
+        const el = messagesContainer.value;
+        if (!el) return;
+        try {
+            if (smooth) {
+                el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+            } else {
+                el.scrollTop = el.scrollHeight;
+            }
+        } catch (e) {
+            el.scrollTop = el.scrollHeight;
+        }
+    });
+}
+
+// Re-scroll when images inside messages load (they can change height)
+function attachImageLoadHandlers() {
+    nextTick(() => {
+        const el = messagesContainer.value;
+        if (!el) return;
+        const imgs = el.querySelectorAll('img');
+        imgs.forEach((img: HTMLImageElement) => {
+            if (!img.dataset.__handled) {
+                img.addEventListener('load', () => {
+                    // During initialPhase we still want to follow image loads
+                    // so content doesn't shift unexpectedly. After that, do not auto-scroll.
+                    if (initialPhase.value) {
+                        scrollToBottom(true);
+                        if (initialPhaseTimeout) clearTimeout(initialPhaseTimeout);
+                        initialPhaseTimeout = window.setTimeout(() => {
+                            initialPhase.value = false;
+                        }, 1200);
+                        return;
+                    }
+                    // If user is already near bottom, keep them pinned to the bottom
+                    // so incoming images don't move the view away from the latest messages.
+                    if (isUserNearBottom()) {
+                        scrollToBottom(true);
+                    }
+                });
+                img.dataset.__handled = '1';
+            }
+        });
+    });
+}
+
+function isUserNearBottom(threshold = 150) {
+    const el = messagesContainer.value;
+    if (!el) return true;
+    const distance = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    return distance <= threshold;
+}
+
+// setup: fetch and poll, and attach scroll listener
 onMounted(() => {
     if (props.roomId) {
         fetchMessages(props.roomId);
@@ -217,12 +234,20 @@ onMounted(() => {
     intervalId = window.setInterval(() => {
         fetchMessages(props.roomId);
     }, 2000);
+    // Attach scroll listener
+    nextTick(() => {
+        const el = messagesContainer.value;
+        if (el) el.addEventListener('scroll', onScroll, { passive: true });
+    });
 });
 
 onUnmounted(() => {
     if (intervalId) {
         clearInterval(intervalId);
     }
+    const el = messagesContainer.value;
+    if (el) el.removeEventListener('scroll', onScroll);
+    if (initialPhaseTimeout) clearTimeout(initialPhaseTimeout);
 });
 
 watch(() => props.roomId, (newRoomId) => {
@@ -233,11 +258,49 @@ watch(() => props.roomId, async (roomId) => {
     members.value = [];
 });
 
+// When messages update (polling or new ones), scroll to bottom and attach handlers
+watch(messages, (newVal, oldVal) => {
+    // Don't auto-scroll here; image loads and fetchMessages handle necessary adjustments.
+    attachImageLoadHandlers();
+});
+
+// Update showScrollToBottom based on user scroll position
+function onScroll() {
+    showScrollToBottom.value = !isUserNearBottom(100);
+}
+
+onMounted(() => {
+    if (props.roomId) {
+        fetchMessages(props.roomId);
+    }
+    intervalId = window.setInterval(() => {
+        fetchMessages(props.roomId);
+    }, 2000);
+    // Attach scroll listener
+    nextTick(() => {
+        const el = messagesContainer.value;
+        if (el) el.addEventListener('scroll', onScroll, { passive: true });
+    });
+});
+
+onUnmounted(() => {
+    if (intervalId) {
+        clearInterval(intervalId);
+    }
+    const el = messagesContainer.value;
+    if (el) el.removeEventListener('scroll', onScroll);
+});
+
 async function send() {
-    // If a file is selected, send it first and skip text
-    if (selectedFile.value) {
-        await sendFile();
-        return;
+    // If file uploader has a file, let it handle sending both file and text
+    if (fileUploader.value && typeof fileUploader.value.sendFile === 'function') {
+        const saved = await fileUploader.value.sendFile(text.value);
+        if (saved) {
+            messages.value.push(saved);
+            text.value = '';
+            scrollToBottom(true);
+            return;
+        }
     }
     if (!text.value.trim()) return;
 
@@ -312,6 +375,8 @@ async function send() {
         }
 
         text.value = '';
+        // scroll to bottom when message is sent
+        scrollToBottom(true);
     } catch (e) {
         // network error: keep optimistic but notify
         console.error(e);
@@ -325,5 +390,28 @@ async function send() {
 }
 .bg-card {
     background: var(--card-bg);
+}
+
+/* Custom scrollbar for messages container */
+.messages::-webkit-scrollbar {
+    width: 10px;
+}
+.messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+.messages::-webkit-scrollbar-thumb {
+    background-color: rgba(100,100,100,0.3);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+.messages::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(100,100,100,0.5);
+}
+
+/* Firefox */
+.messages {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100,100,100,0.3) transparent;
 }
 </style>

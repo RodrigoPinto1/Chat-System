@@ -23,7 +23,9 @@ class MessageFileController extends Controller
         $url = config('app.url') . '/storage/' . ltrim($path, '/');
         $meta = null;
         if ($request->has('meta')) {
-            $meta = $request->input('meta');
+            // meta is sent as a JSON string from the frontend; decode to store as array
+            $decoded = json_decode($request->input('meta'), true);
+            $meta = is_array($decoded) ? $decoded : null;
         }
         $message = Message::create([
             'room_id' => $room->id,

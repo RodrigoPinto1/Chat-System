@@ -30,6 +30,7 @@ class MessageController extends Controller
                 ],
                 'content' => $msg->content,
                 'type' => $msg->type ?? null,
+                'meta' => $msg->meta ?? null,
                 'created_at' => $msg->created_at,
             ];
         });

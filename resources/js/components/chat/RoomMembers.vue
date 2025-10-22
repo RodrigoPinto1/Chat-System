@@ -9,7 +9,10 @@
       </div>
       <ul v-else>
         <li v-for="member in members" :key="member.id" class="flex items-center gap-2 px-3 py-2 border-b last:border-b-0">
-          <img :src="member.avatar || defaultAvatar" class="w-7 h-7 rounded-full border" />
+          <Avatar class="w-7 h-7 rounded-full border">
+            <AvatarImage v-if="member.avatar" :src="member.avatar" />
+            <AvatarFallback class="font-medium text-sm text-black">{{ getInitials(member.name) }}</AvatarFallback>
+          </Avatar>
           <span class="font-medium text-black">{{ member.name }}</span>
           <span class="ml-auto px-2 py-1 rounded text-xs" :class="roleClass(member.role)">{{ member.role }}</span>
         </li>
@@ -20,6 +23,8 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useInitials } from '@/composables/useInitials';
 
 export interface RoomMember {
   id: number;
@@ -31,7 +36,7 @@ export interface RoomMember {
 const props = defineProps<{ roomId: number }>();
 const show = ref(false);
 const members = ref<RoomMember[]>([]);
-const defaultAvatar = 'https://ui-avatars.com/api/?name=User&background=eee&color=555';
+const { getInitials } = useInitials();
 
 function roleClass(role: string) {
   if (role === 'owner') return 'bg-yellow-100 text-yellow-800';

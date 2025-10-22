@@ -1,13 +1,16 @@
 <template>
   <div class="user-search relative w-64">
-    <div class="flex items-center bg-white rounded-full border px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-300">
+  <div class="flex items-center bg-white rounded-full border px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-300">
       <svg class="w-5 h-5 text-gray-400 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input v-model="query" @input="onInput" @keydown.enter.prevent="trySelectByName" placeholder="Buscar user..." class="flex-1 bg-transparent outline-none text-sm" />
+        <input v-model="query" @input="onInput" @keydown.enter.prevent="trySelectByName" placeholder="Buscar user..." class="flex-1 bg-transparent outline-none text-sm" />
     </div>
     <transition name="fade">
       <ul v-if="results.length && showResults" class="dropdown bg-white border rounded-lg shadow-lg mt-2 absolute w-full z-10">
         <li v-for="user in results" :key="user.id" @click="selectUser(user)" class="flex items-center px-3 py-2 cursor-pointer hover:bg-blue-50 transition">
-          <img :src="user.avatar || defaultAvatar" class="w-7 h-7 rounded-full mr-2 border" />
+          <Avatar class="w-7 h-7 rounded-full mr-2 border">
+            <AvatarImage v-if="user.avatar" :src="user.avatar" />
+            <AvatarFallback class="font-medium text-sm text-black">{{ getInitials(user.name) }}</AvatarFallback>
+          </Avatar>
           <span class="font-medium text-gray-800">{{ user.name }}</span>
         </li>
       </ul>
@@ -17,12 +20,14 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useInitials } from '@/composables/useInitials';
 const emit = defineEmits(['select', 'error']);
 const query = ref('');
 interface UserResult { id: number; name: string; avatar?: string }
 const results = ref<UserResult[]>([]);
 const showResults = ref(false);
-const defaultAvatar = 'https://ui-avatars.com/api/?name=User&background=eee&color=555';
+const { getInitials } = useInitials();
 
 async function onInput() {
   showResults.value = !!query.value;

@@ -47,6 +47,9 @@ Route::get('rooms/{room}/members', [RoomController::class, 'members'])->middlewa
 
 Route::post('rooms/{room}/invite', [RoomController::class, 'invite'])->middleware('auth')->name('rooms.invite');
 
+// Mark room as read (update last_read_at on pivot)
+Route::post('rooms/{room}/read', [RoomController::class, 'markRead'])->middleware('auth')->name('rooms.read');
+
 // File upload for chat messages
 Route::post('messages/file', [MessageFileController::class, 'store'])->middleware('auth')->name('messages.file');
 

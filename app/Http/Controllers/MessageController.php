@@ -65,6 +65,16 @@ class MessageController extends Controller
         $message = Message::create($data);
         $message->load('user');
 
+        // When a user sends a message to a room, mark that room as read for them
+        // so their own sent message doesn't count as unread.
+        if (!empty($roomId)) {
+            try {
+                $message->room->users()->updateExistingPivot($user->id, ['last_read_at' => now()]);
+            } catch (\Exception $e) {
+                // If pivot column doesn't exist or other issue, don't block message sending.
+                // We'll handle schema migrations separately.
+            }
+        }
         // Optionally broadcast event here (if you wire MessageSent)
         // event(new \App\Events\MessageSent($message));
 

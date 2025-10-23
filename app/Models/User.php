@@ -56,7 +56,7 @@ class User extends Authenticatable
     // Relations
     public function rooms()
     {
-        return $this->belongsToMany(Room::class)->withTimestamps()->withPivot(['role', 'joined_at']);
+        return $this->belongsToMany(Room::class)->withTimestamps()->withPivot(['role', 'joined_at', 'last_read_at']);
     }
 
     public function messages()

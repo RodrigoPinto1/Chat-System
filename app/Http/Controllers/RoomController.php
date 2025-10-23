@@ -6,6 +6,7 @@ use App\Models\Room;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Events\UserInvitedToRoom;
+use Illuminate\Support\Facades\Schema;
 
 class RoomController extends Controller
 {
@@ -14,10 +15,44 @@ class RoomController extends Controller
     {
         $user = $request->user();
         // Show rooms where the user is a member (any role)
+        // Include a messages_count so the frontend can show message counts without extra requests
         $rooms = Room::whereHas('users', function ($q) use ($user) {
             $q->where('user_id', $user->id);
-        })->get();
-        return response()->json($rooms);
+        })->withCount('messages')->get();
+
+        // Compute unread_count per room for the current user based on pivot.last_read_at
+        // If the pivot column doesn't exist yet (migration not run), avoid querying it and
+        // just return rooms with unread_count = 0 to prevent SQL errors.
+        $hasLastRead = Schema::hasColumn('room_user', 'last_read_at');
+
+        if (!$hasLastRead) {
+            // Migration not applied yet — return rooms without per-user unread counts
+            $roomsArray = $rooms->map(function ($room) use ($user) {
+                // Determine if current user is owner based on pivot role if present
+                $pivot = $room->users()->where('user_id', $user->id)->first()?->pivot ?? null;
+                $isOwner = $pivot && isset($pivot->role) ? ($pivot->role === 'owner') : false;
+                return array_merge($room->toArray(), ['unread_count' => 0, 'is_owner' => $isOwner]);
+            });
+            return response()->json($roomsArray->values());
+        }
+
+        $roomsWithUnread = $rooms->map(function ($room) use ($user) {
+            // Find pivot info for this user
+            $pivot = $room->users()->where('user_id', $user->id)->first()?->pivot ?? null;
+            $isOwner = $pivot && isset($pivot->role) ? ($pivot->role === 'owner') : false;
+            $lastRead = $pivot && $pivot->last_read_at ? $pivot->last_read_at : $pivot?->joined_at;
+
+            if ($lastRead) {
+                $unread = $room->messages()->where('created_at', '>', $lastRead)->count();
+            } else {
+                // if no lastRead and no joined_at, consider all messages as unread
+                $unread = $room->messages()->count();
+            }
+
+            return array_merge($room->toArray(), ['unread_count' => $unread, 'is_owner' => $isOwner]);
+        });
+
+        return response()->json($roomsWithUnread->values());
     }
 
     // Create a new room
@@ -87,5 +122,21 @@ class RoomController extends Controller
         // Fire broadcast event
         event(new UserInvitedToRoom($room, $user, \App\Models\User::find($inviteeId)));
         return response()->json(['invited' => true]);
+    }
+
+    // Mark the room as read for the current user by updating pivot.last_read_at
+    public function markRead(Request $request, Room $room)
+    {
+        $user = $request->user();
+        // Ensure user is a member
+        $isMember = $room->users()->where('user_id', $user->id)->exists();
+        if (!$isMember) {
+            return response()->json(['error' => 'Você não é membro desta sala.'], 403);
+        }
+
+        // Update pivot
+        $room->users()->updateExistingPivot($user->id, ['last_read_at' => now()]);
+
+        return response()->json(['marked' => true]);
     }
 }

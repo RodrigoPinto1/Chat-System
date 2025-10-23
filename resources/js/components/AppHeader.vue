@@ -35,7 +35,9 @@ import { dashboard } from '@/routes';
 import type { BreadcrumbItem, NavItem } from '@/types';
 import { InertiaLinkProps, Link, usePage } from '@inertiajs/vue3';
 import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { currentRoomName, inviteSearchVisible, hideInviteSearch } from '@/stores/ui';
+import UserSearch from '@/components/chat/UserSearch.vue';
 
 interface Props {
     breadcrumbs?: BreadcrumbItem[];
@@ -80,6 +82,37 @@ const rightNavItems: NavItem[] = [
         icon: BookOpen,
     },
 ];
+
+const inviteQuery = ref('');
+
+function toggleInviteSearch() {
+    inviteSearchVisible.value = !inviteSearchVisible.value;
+}
+
+function emitInviteSearch() {
+    window.dispatchEvent(new CustomEvent('invite:search', { detail: { query: inviteQuery.value } }));
+}
+
+function onHeaderUserSelect(user: any) {
+    window.dispatchEvent(new CustomEvent('invite:selected', { detail: { user } }));
+    // optionally hide the search after selection
+    inviteSearchVisible.value = false;
+}
+
+function onInviteToggle() {
+    inviteSearchVisible.value = !inviteSearchVisible.value;
+    console.log('[AppHeader] onInviteToggle called, inviteSearchVisible =', inviteSearchVisible.value);
+}
+
+onMounted(() => {
+    console.log('[AppHeader] mounted, registering invite:toggle listener');
+    window.addEventListener('invite:toggle', onInviteToggle as EventListener);
+});
+
+onUnmounted(() => {
+    console.log('[AppHeader] unmounted, removing invite:toggle listener');
+    window.removeEventListener('invite:toggle', onInviteToggle as EventListener);
+});
 </script>
 
 <template>
@@ -187,12 +220,30 @@ const rightNavItems: NavItem[] = [
                     </NavigationMenu>
                 </div>
 
+                <!-- Center slot for search (appears in the middle of the navbar) -->
+                <div class="flex-1 items-center justify-center">
+                    <transition name="search" appear>
+                        <div v-if="inviteSearchVisible" class="w-96 mx-auto">
+                            <UserSearch
+                                @select="onHeaderUserSelect"
+                                @error="(e) => console.error('Invite search error', e)"
+                            />
+                        </div>
+                    </transition>
+                </div>
+
                 <div class="ml-auto flex items-center space-x-2">
-                    <div class="relative flex items-center space-x-1">
+                    <!-- Current room name (if any) -->
+                    <div v-if="currentRoomName" class="mr-4 text-sm font-medium truncate max-w-xs">
+                        Sala: <span class="font-semibold">{{ currentRoomName }}</span>
+                    </div>
+                        <div class="relative flex items-center space-x-1">
                         <Button
                             variant="ghost"
                             size="icon"
                             class="group h-9 w-9 cursor-pointer"
+                            @click="toggleInviteSearch"
+                            title="Convidar"
                         >
                             <Search
                                 class="size-5 opacity-80 group-hover:opacity-100"
@@ -280,3 +331,17 @@ const rightNavItems: NavItem[] = [
         </div>
     </div>
 </template>
+
+<style scoped>
+.search-enter-active, .search-leave-active {
+    transition: opacity 200ms ease, transform 200ms ease;
+}
+.search-enter-from, .search-leave-to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+}
+.search-enter-to, .search-leave-from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+</style>

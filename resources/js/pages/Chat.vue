@@ -1,16 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import ChatPanel from '@/components/chat/ChatPanel.vue';
 import RoomsList from '@/components/chat/RoomsList.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 
-const ROOM_KEY = 'selectedRoomId';
 const selectedRoomId = ref<number|null>(null); // null means no room selected
 
 function handleRoomSelect(roomId: number) {
     selectedRoomId.value = roomId;
-    localStorage.setItem(ROOM_KEY, String(roomId));
 }
+
+onMounted(() => {
+    // prefer query param when present
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get('room');
+    if (room) {
+        selectedRoomId.value = Number(room);
+    }
+});
 </script>
 
 <style scoped>

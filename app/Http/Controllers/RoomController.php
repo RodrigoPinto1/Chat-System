@@ -31,7 +31,17 @@ class RoomController extends Controller
         $room = Room::create($data);
         // Optionally add creator as member
         $room->users()->attach(Auth::id(), ['role' => 'owner', 'joined_at' => now()]);
-        return response()->json($room, 201);
+        // Redirect to the main chat page and open the newly created room.
+        // Use Inertia::location so we force a full browser redirect even when the request
+        // was intercepted by Inertia/XHR on the client side.
+        return \Inertia\Inertia::location('/chat?room=' . $room->id);
+    }
+
+    // Show create form (Inertia page)
+    public function create()
+    {
+        return
+            \Inertia\Inertia::render('rooms/Create');
     }
 
     // Join a room

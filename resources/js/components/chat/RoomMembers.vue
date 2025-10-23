@@ -79,6 +79,9 @@ onMounted(() => {
 watch(() => props.roomId, (roomId) => {
   fetchMembers(roomId);
 });
+
+// expose fetchMembers so parent components can refresh the list after actions
+defineExpose({ fetchMembers });
 </script>
 
 <style scoped>

@@ -4,7 +4,7 @@
         <div class="flex items-center justify-between mb-2">
             <div class="font-semibold">Chat</div>
             <div class="flex items-center gap-2">
-                <RoomMembers :room-id="props.roomId" />
+                <RoomMembers ref="roomMembersRef" :room-id="props.roomId" />
                 <!-- Invite form -->
                 <form @submit.prevent="submitInvite" class="flex items-center gap-2">
                     <UserSearch @select="onUserSelect" @error="inviteError = $event" />
@@ -61,6 +61,7 @@ const inviteUser = ref<any|null>(null);
 const inviteError = ref('');
 const members = ref<any[]>([]);
 const defaultAvatar = 'https://ui-avatars.com/api/?name=User&background=eee&color=555';
+const roomMembersRef = ref<any | null>(null);
 
 // Use Inertia shared props to get the authenticated user (falls back to demo id)
 const page: any = usePage();
@@ -108,6 +109,8 @@ async function submitInvite() {
         const result = await res.json();
         console.log('[ChatPanel] Invite success', result);
         inviteUser.value = null;
+        // simple: reload the page so rooms/members/chat refresh (matches existing behavior)
+        window.location.reload();
     } catch (e) {
         inviteError.value = 'Erro de rede.';
         console.log('[ChatPanel] Invite network error', e);

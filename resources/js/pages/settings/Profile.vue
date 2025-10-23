@@ -4,6 +4,8 @@ import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileCo
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
+// Use global Inertia instance to avoid missing types in build environment
+const Inertia: any = (window as any).Inertia || (globalThis as any).Inertia;
 
 import DeleteUser from '@/components/DeleteUser.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -34,6 +36,8 @@ const user = page.props.auth.user;
 const avatarPreview = ref(user.avatar || null);
 const avatarFile = ref<File | null>(null);
 const serverErrors = ref<any>({});
+const submitting = ref(false);
+const saved = ref(false);
 
 function onAvatarChange(e: Event) {
     const t = e.target as HTMLInputElement;
@@ -53,33 +57,25 @@ async function submitProfile(e: Event) {
     if (avatarFile.value) fd.set('avatar', avatarFile.value as Blob);
 
     const action = ProfileController.update.form().action;
-    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    submitting.value = true;
+    serverErrors.value = {};
 
-    const res = await fetch(action, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-            'X-CSRF-TOKEN': token,
-            'X-Requested-With': 'XMLHttpRequest',
+    Inertia.post(action, fd, {
+        preserveState: true,
+        preserveScroll: true,
+        onError: (errors: any) => {
+            serverErrors.value = errors || {};
+            submitting.value = false;
         },
-        body: fd,
+        onSuccess: (page: any) => {
+            // update avatar preview from returned props if available
+            const newAvatar = page.props?.auth?.user?.avatar;
+            if (newAvatar) avatarPreview.value = newAvatar;
+            submitting.value = false;
+            saved.value = true;
+            setTimeout(() => (saved.value = false), 1500);
+        },
     });
-
-    if (res.status === 422) {
-        // validation errors
-        const body = await res.json().catch(() => ({}));
-        serverErrors.value = body.errors || {};
-        return;
-    }
-
-    if (!res.ok) {
-        // generic failure: reload to show server flash or errors
-        window.location.reload();
-        return;
-    }
-
-    // success: reload to refresh user data
-    window.location.reload();
 }
 </script>
 

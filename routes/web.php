@@ -36,6 +36,8 @@ Route::post('pusher/receive', [PusherController::class, 'receive'])->name('pushe
 // Room routes
 Route::get('rooms', [RoomController::class, 'index'])->middleware('auth')->name('rooms.index');
 
+Route::get('rooms/create', [RoomController::class, 'create'])->middleware('auth')->name('rooms.create');
+
 Route::post('rooms', [RoomController::class, 'store'])->middleware('auth')->name('rooms.store');
 
 Route::post('rooms/{room}/join', [RoomController::class, 'join'])->middleware('auth')->name('rooms.join');

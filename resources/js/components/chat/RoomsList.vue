@@ -3,7 +3,7 @@
         <div class="mb-4 flex items-center justify-between">
             <h3 class="text-lg font-semibold">Salas</h3>
             <div class="text-sm text-gray-500">
-                <span v-if="refreshing">Atualizando...</span>
+                <span v-if="refreshing"></span>
             </div>
             <div class="flex items-center gap-4" style="min-width: 220px">
                 <!-- Search input -->
@@ -96,6 +96,16 @@
         </div>
 
         <div>
+            <!-- TODO: Implement filter functionality -->
+            <div class="flex gap-5 mb-6 mt-6">
+                <div class="active border border-gray-300 rounded px-3 py-1 cursor-pointer" @click="goFilter()">
+                    <input type="button" value="Grupos"></input>
+                </div>
+                <div class="border border-gray-300 rounded px-3 py-1 cursor-pointer" @click="goFilter()">
+                    <input type="button" value="Privados"></input>
+                </div>
+            </div>
+
             <div v-if="loading" class="py-4 text-center text-sm text-gray-500">
                 Carregando salas...
             </div>

@@ -1,3 +1,39 @@
+<template>
+    <AppLayout>
+        <template #default>
+            <div class="chat-app">
+                <div class="chat-sidebar">
+                    <RoomsList @select="handleRoomSelect" />
+                </div>
+                <div class="chat-main">
+                    <template v-if="selectedRoomId">
+                        <ChatPanel :room-id="selectedRoomId" />
+                    </template>
+                    <template v-else>
+                        <div
+                            class="flex h-full w-full flex-col items-center justify-center p-12 text-center"
+                        >
+                            <h1 class="mb-4 text-4xl font-bold">
+                                Bem-vindo ao Chat!
+                            </h1>
+                            <p class="mb-6 text-lg text-muted">
+                                Selecione uma sala à esquerda para começar a
+                                conversar.<br />Crie uma nova sala para iniciar
+                                um chat com seus amigos.
+                            </p>
+                            <img
+                                src="/favicon.svg"
+                                alt="Chat Hero"
+                                class="mb-6 h-32 w-32 opacity-80"
+                            />
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+    </AppLayout>
+</template>
+
 <script setup lang="ts">
 import ChatPanel from '@/components/chat/ChatPanel.vue';
 import RoomsList from '@/components/chat/RoomsList.vue';
@@ -84,38 +120,3 @@ onMounted(() => {
     display: flex;
 }
 </style>
-<template>
-    <AppLayout>
-        <template #default>
-            <div class="chat-app">
-                <div class="chat-sidebar">
-                    <RoomsList @select="handleRoomSelect" />
-                </div>
-                <div class="chat-main">
-                    <template v-if="selectedRoomId">
-                        <ChatPanel :room-id="selectedRoomId" />
-                    </template>
-                    <template v-else>
-                        <div
-                            class="flex h-full w-full flex-col items-center justify-center p-12 text-center"
-                        >
-                            <h1 class="mb-4 text-4xl font-bold">
-                                Bem-vindo ao Chat!
-                            </h1>
-                            <p class="mb-6 text-lg text-muted">
-                                Selecione uma sala à esquerda para começar a
-                                conversar.<br />Crie uma nova sala para iniciar
-                                um chat com seus amigos.
-                            </p>
-                            <img
-                                src="/favicon.svg"
-                                alt="Chat Hero"
-                                class="mb-6 h-32 w-32 opacity-80"
-                            />
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </template>
-    </AppLayout>
-</template>

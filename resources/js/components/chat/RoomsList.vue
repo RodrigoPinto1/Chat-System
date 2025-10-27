@@ -55,9 +55,9 @@
                         <ul>
                             <li
                                 class="cursor-pointer px-3 py-2 text-black hover:bg-gray-100"
-                                @click="setFilter('all')"
+                                @click="setFilter('groups')"
                             >
-                                All rooms
+                                Grupos
                             </li>
                             <li
                                 class="cursor-pointer px-3 py-2 text-black hover:bg-gray-100"
@@ -97,13 +97,27 @@
 
         <div>
             <!-- TODO: Implement filter functionality -->
-            <div class="flex gap-5 mb-6 mt-6">
-                <div class="active border border-gray-300 rounded px-3 py-1 cursor-pointer" @click="goFilter()">
-                    <input type="button" value="Grupos"></input>
+            <div class="mt-6 mb-6 flex gap-5">
+                <div
+                    :class="[
+                        'cursor-pointer rounded border px-3 py-1',
+                        activeFilter === 'groups'
+                            ? 'border-gray-600 bg-gray-100'
+                            : 'border-gray-300',
+                    ]"
+                    @click.prevent="setFilter('groups')"
+                >
+                    <button
+                        :class="
+                            activeFilter === 'groups'
+                                ? 'text-sm font-semibold text-black'
+                                : 'text-sm text-gray-600'
+                        "
+                    >
+                        Grupos
+                    </button>
                 </div>
-                <div class="border border-gray-300 rounded px-3 py-1 cursor-pointer" @click="goFilter()">
-                    <input type="button" value="Privados"></input>
-                </div>
+                <!-- 'Privados' removed to avoid confusion while private chats are not implemented -->
             </div>
 
             <div v-if="loading" class="py-4 text-center text-sm text-gray-500">
@@ -135,7 +149,19 @@
                                 class="h-10 w-10 rounded-full"
                             />
                             <div>
-                                <div class="font-medium">{{ room.name }}</div>
+                                <div class="font-medium">
+                                    {{ room.name }}
+                                    <span
+                                        v-if="debugShowProps"
+                                        class="ml-2 text-xs text-gray-500"
+                                        >[m:{{
+                                            room.members_count || 0
+                                        }}
+                                        owner:{{ room.is_owner }} priv:{{
+                                            room.is_private
+                                        }}]</span
+                                    >
+                                </div>
                                 <div class="text-sm text-muted">
                                     {{ room.reference }}
                                 </div>
@@ -171,7 +197,9 @@ const isFetching = ref(false);
 const emit = defineEmits(['select', 'rooms-loaded']);
 const searchQuery = ref('');
 const showFilterMenu = ref(false);
-const activeFilter = ref<'all' | 'owned' | 'unread'>('all');
+// Debug badges are off by default for a cleaner UI
+const debugShowProps = ref(false);
+const activeFilter = ref<'groups' | 'owned' | 'unread'>('groups');
 const page: any = usePage();
 const authUserId = page.props.value?.auth?.user?.id ?? null;
 
@@ -179,19 +207,33 @@ const filteredRooms = computed(() => {
     const q = String(searchQuery.value || '')
         .trim()
         .toLowerCase();
+
+    function parseBool(v: any) {
+        if (v === true || v === 1) return true;
+        if (v === '1' || v === 'true') return true;
+        return false;
+    }
+
     return rooms.value.filter((r: any) => {
-        // filter by activeFilter
+        const members = Number(r?.members_count ?? 0) || 0;
+        const isOwner = parseBool(r?.is_owner);
+        // Deterministic rules (simple):
+        // - 'owned' and 'unread' filters preserved; 'groups' shows everything by default
         if (activeFilter.value === 'owned') {
-            // backend provides is_owner boolean per room (true when user is owner)
-            if (!r.is_owner) return false;
+            // Only rooms the user owns
+            if (!isOwner) return false;
+        } else if (activeFilter.value === 'unread') {
+            if (!(Number(r?.unread_count) > 0)) return false;
         }
-        if (activeFilter.value === 'unread') {
-            if (!(Number(r.unread_count) > 0)) return false;
-        }
+
         if (!q) return true;
         return (
-            (r.name || '').toLowerCase().includes(q) ||
-            (r.reference || '').toLowerCase().includes(q)
+            String(r?.name || '')
+                .toLowerCase()
+                .includes(q) ||
+            String(r?.reference || '')
+                .toLowerCase()
+                .includes(q)
         );
     });
 });
@@ -259,7 +301,7 @@ function toggleFilterMenu() {
     showFilterMenu.value = !showFilterMenu.value;
 }
 
-function setFilter(f: 'all' | 'owned' | 'unread') {
+function setFilter(f: 'groups' | 'owned' | 'unread') {
     activeFilter.value = f;
     showFilterMenu.value = false;
 }

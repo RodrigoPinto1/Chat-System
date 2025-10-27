@@ -31,7 +31,9 @@ class RoomController extends Controller
                 // Determine if current user is owner based on pivot role if present
                 $pivot = $room->users()->where('user_id', $user->id)->first()?->pivot ?? null;
                 $isOwner = $pivot && isset($pivot->role) ? ($pivot->role === 'owner') : false;
-                return array_merge($room->toArray(), ['unread_count' => 0, 'is_owner' => $isOwner]);
+                $membersCount = $room->users()->count();
+                $isPrivate = $membersCount === 2;
+                return array_merge($room->toArray(), ['unread_count' => 0, 'is_owner' => $isOwner, 'members_count' => $membersCount, 'is_private' => $isPrivate]);
             });
             return response()->json($roomsArray->values());
         }
@@ -49,7 +51,9 @@ class RoomController extends Controller
                 $unread = $room->messages()->count();
             }
 
-            return array_merge($room->toArray(), ['unread_count' => $unread, 'is_owner' => $isOwner]);
+            $membersCount = $room->users()->count();
+            $isPrivate = $membersCount === 2;
+            return array_merge($room->toArray(), ['unread_count' => $unread, 'is_owner' => $isOwner, 'members_count' => $membersCount, 'is_private' => $isPrivate]);
         });
 
         return response()->json($roomsWithUnread->values());

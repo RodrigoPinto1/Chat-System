@@ -59,7 +59,7 @@
                     <!-- Info -->
                     <!-- Search -->
                     <button
-                        class="btn-ghost flex h-8 w-8 items-center justify-center rounded cursor-pointer"
+                        class="btn-ghost flex h-8 w-8 cursor-pointer items-center justify-center rounded"
                         title="Pesquisar"
                     >
                         <svg
@@ -68,7 +68,7 @@
                             viewBox="0 0 24 24"
                             stroke-width="1.5"
                             stroke="currentColor"
-                            class="w-5 h-5 text-gray-400"
+                            class="h-5 w-5 text-gray-400"
                         >
                             <path
                                 stroke-linecap="round"
@@ -110,15 +110,16 @@
             </svg>
         </button>
         <div class="mb-2 flex w-full items-center gap-3">
-            <div class="rounded border border-gray-200 p-1.75">
-                <p>Hi! Awesome</p>
-            </div>
-            <div class="rounded border border-gray-200 p-1.75">
-                <p>Hi! Will check it out</p>
-            </div>
-            <div class="rounded border border-gray-200 p-1.75">
-                <p>Hi! How are you doing</p>
-            </div>
+            <template v-for="(m, idx) in filteredCanned" :key="idx">
+                <button
+                    type="button"
+                    class="rounded border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 hover:text-black"
+                    @click.prevent="sendPreMade(m)"
+                    :title="m"
+                >
+                    {{ m }}
+                </button>
+            </template>
         </div>
 
         <form @submit.prevent="send">
@@ -131,6 +132,10 @@
                     class="flex-1 rounded border p-2"
                     placeholder="Escreve uma mensagem..."
                 />
+
+                <div v-if="sendError" class="ml-2 text-sm text-red-500">
+                    {{ sendError }}
+                </div>
 
                 <div
                     class="flex h-10 w-10 items-center justify-center rounded-4xl border bg-orange-500 text-center"
@@ -332,7 +337,7 @@
 <script setup lang="ts">
 import { inviteSearchVisible } from '@/stores/ui';
 import { usePage } from '@inertiajs/vue3';
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import FileUploader from './FileUploader.vue';
 import MessageItem from './MessageItem.vue';
 
@@ -340,6 +345,7 @@ const props = defineProps<{ roomId: number }>();
 const messages = ref([] as any[]);
 const text = ref('');
 const inviteUser = ref<any | null>(null);
+const sendError = ref('');
 const inviteError = ref('');
 const inviteSuccess = ref('');
 const members = ref<any[]>([]);
@@ -348,6 +354,35 @@ const defaultAvatar =
 const roomMembersRef = ref<any | null>(null);
 const roomName = ref('Chat');
 const roomAvatar = ref(defaultAvatar);
+// canned (pre-made) messages that can be clicked to quickly send
+const cannedMessages = [
+    'Hi! Awesome',
+    'Hi! Will check it out',
+    'Hi! How are you doing',
+    'Thanks, I will follow up',
+    'Got it, thanks!',
+];
+
+// filtered suggestions that update as the user types
+const filteredCanned = computed(() => {
+    const q = String(text.value || '')
+        .trim()
+        .toLowerCase();
+    if (!q) return cannedMessages.slice(0, 5);
+    return cannedMessages
+        .filter((m) => m.toLowerCase().includes(q))
+        .slice(0, 5);
+});
+
+async function sendPreMade(message: string) {
+    // Set the input and send immediately
+    text.value = message;
+    try {
+        await send();
+    } catch (e) {
+        console.warn('[ChatPanel] failed to send pre-made message', e);
+    }
+}
 // Listen to header invite search/select events
 function toggleHeaderInvite() {
     console.log(
@@ -697,6 +732,14 @@ onUnmounted(() => {
 });
 
 async function send() {
+    sendError.value = '';
+    // Guard: must have a room id to send
+    if (!props.roomId) {
+        console.warn('[ChatPanel] send blocked: missing roomId', props.roomId);
+        sendError.value = 'Sala não selecionada.';
+        return;
+    }
+
     // If file uploader has a file, let it handle sending both file and text
     if (
         fileUploader.value &&
@@ -748,8 +791,10 @@ async function send() {
             try {
                 const body = await res.text();
                 console.error('Failed to save message', res.status, body);
+                sendError.value = 'Erro ao enviar mensagem.';
             } catch (e) {
                 console.error('Failed to save message', res.status);
+                sendError.value = 'Erro ao enviar mensagem.';
             }
             return;
         }
@@ -798,6 +843,7 @@ async function send() {
     } catch (e) {
         // network error: keep optimistic but notify
         console.error(e);
+        sendError.value = 'Erro de rede ao enviar mensagem.';
     }
 }
 </script>

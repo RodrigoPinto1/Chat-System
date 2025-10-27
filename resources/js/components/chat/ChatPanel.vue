@@ -157,26 +157,82 @@
                         </svg>
                     </button>
                 </div>
-                <div
-                    class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-4xl border bg-gray-50"
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                        stroke="currentColor"
-                        class="h-6 w-6 text-gray-500 hover:text-blue-600"
+                <!-- Recording controls -->
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        :title="
+                            isRecording
+                                ? 'Parar gravação'
+                                : 'Gravar mensagem de voz'
+                        "
+                        @click.prevent="
+                            isRecording ? stopRecording() : startRecording()
+                        "
+                        class="flex h-10 w-10 items-center justify-center rounded-4xl border bg-gray-50"
                     >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"
-                        />
-                    </svg>
+                        <svg
+                            v-if="!isRecording"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="h-6 w-6 text-gray-500 hover:text-blue-600"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3z"
+                            />
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M19.5 12a7.5 7.5 0 0 1-15 0"
+                            />
+                        </svg>
+                        <svg
+                            v-else
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            class="h-6 w-6 text-red-600"
+                        >
+                            <rect
+                                x="6"
+                                y="6"
+                                width="12"
+                                height="12"
+                                rx="2"
+                                ry="2"
+                            />
+                        </svg>
+                    </button>
                 </div>
             </div>
         </form>
+        <!-- Recording preview and send/cancel actions -->
+        <div v-if="recordedUrl" class="mt-2 flex items-center gap-3">
+            <audio :src="recordedUrl" controls class="max-w-xs" />
+            <div class="flex items-center gap-2">
+                <button
+                    type="button"
+                    class="btn btn-sm btn-primary"
+                    @click="sendRecording"
+                >
+                    Enviar
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-sm"
+                    @click="cancelRecording"
+                >
+                    Cancelar
+                </button>
+                <div class="text-sm text-gray-500">
+                    {{ formatSeconds(recordSeconds) }}
+                </div>
+            </div>
+        </div>
         <div class="mt-2 flex w-full items-center justify-start gap-3">
             <button
                 type="button"
@@ -584,6 +640,15 @@ let intervalId: number | undefined;
 const messagesContainer = ref<HTMLElement | null>(null);
 // File uploader component is used for file selection, preview and upload
 const fileUploader = ref<any | null>(null);
+// Recording state
+const isRecording = ref(false);
+const recorder = ref<MediaRecorder | null>(null);
+const recorderStream = ref<MediaStream | null>(null);
+const recordedBlob = ref<Blob | null>(null);
+const recordedUrl = ref<string | null>(null);
+const recordStartedAt = ref<number | null>(null);
+const recordSeconds = ref(0);
+let recordTimerId: number | undefined;
 const showScrollToBottom = ref(false);
 // allow auto-scrolling only during the initial phase (to land at bottom),
 // afterwards the user is free to scroll without being pulled down.
@@ -592,6 +657,152 @@ let initialPhaseTimeout: number | undefined;
 
 function triggerUploader() {
     fileUploader.value?.trigger?.();
+}
+
+function formatSeconds(sec: number) {
+    const s = Math.floor(sec % 60)
+        .toString()
+        .padStart(2, '0');
+    const m = Math.floor(sec / 60)
+        .toString()
+        .padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+async function startRecording() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('Media devices not supported');
+        return;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+        });
+        recorderStream.value = stream;
+        const mr = new MediaRecorder(stream);
+        const chunks: BlobPart[] = [];
+        mr.ondataavailable = (ev: BlobEvent) => {
+            if (ev.data && ev.data.size) chunks.push(ev.data);
+        };
+        mr.onstop = () => {
+            const mime =
+                (chunks[0] && (chunks[0] as Blob).type) || 'audio/webm';
+            recordedBlob.value = new Blob(chunks, { type: mime });
+            if (recordedUrl.value) {
+                try {
+                    URL.revokeObjectURL(recordedUrl.value);
+                } catch (e) {}
+            }
+            recordedUrl.value = URL.createObjectURL(recordedBlob.value);
+            isRecording.value = false;
+            // stop any tracks
+            if (recorderStream.value) {
+                recorderStream.value.getTracks().forEach((t) => t.stop());
+                recorderStream.value = null;
+            }
+            if (recordTimerId) clearInterval(recordTimerId);
+            recordStartedAt.value = null;
+            recordSeconds.value = Math.max(recordSeconds.value, 0);
+        };
+        recorder.value = mr;
+        mr.start();
+        isRecording.value = true;
+        recordStartedAt.value = Date.now();
+        recordSeconds.value = 0;
+        recordTimerId = window.setInterval(() => {
+            if (recordStartedAt.value) {
+                recordSeconds.value = Math.floor(
+                    (Date.now() - recordStartedAt.value) / 1000,
+                );
+            }
+        }, 250);
+    } catch (e) {
+        console.error('Failed to start recording', e);
+    }
+}
+
+function stopRecording() {
+    try {
+        if (recorder.value && recorder.value.state !== 'inactive') {
+            recorder.value.stop();
+        }
+    } catch (e) {
+        console.warn('stopRecording error', e);
+    }
+}
+
+function cancelRecording() {
+    // discard recorded blob and cleanup
+    recordedBlob.value = null;
+    if (recordedUrl.value) {
+        try {
+            URL.revokeObjectURL(recordedUrl.value);
+        } catch (e) {}
+    }
+    recordedUrl.value = null;
+    recordSeconds.value = 0;
+    if (recorderStream.value) {
+        recorderStream.value.getTracks().forEach((t) => t.stop());
+        recorderStream.value = null;
+    }
+    if (recorder.value && recorder.value.state !== 'inactive') {
+        try {
+            recorder.value.stop();
+        } catch (e) {}
+    }
+    recorder.value = null;
+    isRecording.value = false;
+    if (recordTimerId) clearInterval(recordTimerId);
+    recordStartedAt.value = null;
+}
+
+async function sendRecording() {
+    if (!recordedBlob.value || !props.roomId) return;
+    // Convert blob to a file and set it in the file uploader, then call sendFile()
+    const filename = `voice_${Date.now()}.webm`;
+    const file = new File([recordedBlob.value], filename, {
+        type: recordedBlob.value.type || 'audio/webm',
+    });
+    try {
+        if (
+            fileUploader.value &&
+            typeof fileUploader.value.setFile === 'function'
+        ) {
+            fileUploader.value.setFile(file, recordedUrl.value);
+            const saved = await fileUploader.value.sendFile();
+            if (saved) {
+                messages.value.push(saved);
+                // cleanup
+                cancelRecording();
+                scrollToBottom(true);
+            }
+        } else {
+            // fallback: post directly to /messages/file
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('room_id', String(props.roomId));
+            const token =
+                document
+                    .querySelector('meta[name="csrf-token"]')
+                    ?.getAttribute('content') || '';
+            formData.append('_token', token);
+            const res = await fetch('/messages/file', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: formData,
+            });
+            if (res.ok) {
+                const saved = await res.json();
+                messages.value.push(saved);
+                cancelRecording();
+                scrollToBottom(true);
+            } else {
+                console.error('Audio upload failed', await res.text());
+            }
+        }
+    } catch (e) {
+        console.error('sendRecording error', e);
+    }
 }
 
 function scrollToBottom(smooth = false) {

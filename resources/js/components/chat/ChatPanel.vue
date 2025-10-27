@@ -128,10 +128,13 @@
             </div>
             <div class="flex items-center gap-2">
                 <input
+                    ref="messageInput"
                     v-model="text"
                     class="flex-1 rounded border p-2"
                     placeholder="Escreve uma mensagem..."
                 />
+
+                <!-- Emoji picker is attached to the existing emoji SVG below (wrapped in a button) -->
 
                 <div v-if="sendError" class="ml-2 text-sm text-red-500">
                     {{ sendError }}
@@ -255,20 +258,53 @@
                     />
                 </svg>
             </button>
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="h-6 w-6 text-gray-500 hover:text-blue-600"
-            >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z"
-                />
-            </svg>
+            <div class="relative">
+                <button
+                    type="button"
+                    class="btn-ghost p-1"
+                    @click.prevent="toggleEmojiPicker"
+                    title="Emoji"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="1.5"
+                        stroke="currentColor"
+                        class="h-6 w-6 text-gray-500 hover:text-blue-600"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z"
+                        />
+                    </svg>
+                </button>
+                <div
+                    v-if="showEmojiPicker"
+                    ref="emojiPickerRef"
+                    class="absolute bottom-12 left-0 z-50 w-64 rounded border bg-white p-2 shadow"
+                >
+                    <input
+                        v-model="emojiQuery"
+                        placeholder="Procurar emoji..."
+                        class="mb-2 w-full rounded border p-1 text-sm"
+                    />
+                    <div
+                        class="grid max-h-40 grid-cols-8 gap-1 overflow-auto p-1"
+                    >
+                        <button
+                            v-for="(e, idx) in filteredEmojis"
+                            :key="idx"
+                            type="button"
+                            class="rounded p-1 text-lg hover:bg-gray-100"
+                            @click="insertEmoji(e)"
+                        >
+                            {{ e }}
+                        </button>
+                    </div>
+                </div>
+            </div>
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -658,6 +694,135 @@ let initialPhaseTimeout: number | undefined;
 function triggerUploader() {
     fileUploader.value?.trigger?.();
 }
+
+// Emoji picker state
+const messageInput = ref<HTMLInputElement | null>(null);
+const showEmojiPicker = ref(false);
+const emojiPickerRef = ref<HTMLElement | null>(null);
+const emojiQuery = ref('');
+const baseEmojis = [
+    '😀',
+    '😁',
+    '😂',
+    '🤣',
+    '😃',
+    '😄',
+    '😅',
+    '😆',
+    '😉',
+    '😊',
+    '😇',
+    '🙂',
+    '🙃',
+    '😉',
+    '😍',
+    '😘',
+    '😗',
+    '😙',
+    '😚',
+    '😋',
+    '😜',
+    '🤪',
+    '😝',
+    '🤑',
+    '🤗',
+    '🤩',
+    '🤔',
+    '🤨',
+    '😐',
+    '😑',
+    '😶',
+    '🙄',
+    '😏',
+    '😣',
+    '😥',
+    '😮',
+    '🤐',
+    '😯',
+    '😪',
+    '😴',
+    '😌',
+    '🤓',
+    '😎',
+    '🤠',
+    '🥳',
+    '😤',
+    '😢',
+    '😭',
+    '😰',
+    '😱',
+    '😖',
+    '😓',
+    '😩',
+    '😫',
+    '😡',
+    '😠',
+    '🤬',
+    '🤯',
+    '😳',
+    '🥺',
+];
+
+const filteredEmojis = computed(() => {
+    const q = emojiQuery.value.trim().toLowerCase();
+    if (!q) return baseEmojis;
+    // naive filter: match unicode name approximations or include by codepoint description
+    return baseEmojis.filter((e) => e.includes(q));
+});
+
+function toggleEmojiPicker() {
+    showEmojiPicker.value = !showEmojiPicker.value;
+    if (showEmojiPicker.value) {
+        // focus search input automatically after nextTick
+        nextTick(() => {
+            const el = emojiPickerRef.value as HTMLElement | null;
+            const input = el?.querySelector('input') as HTMLInputElement | null;
+            if (input) input.focus();
+        });
+    }
+}
+
+function insertEmoji(emoji: string) {
+    // insert emoji at cursor position in the input field
+    const el = messageInput.value as HTMLInputElement | null;
+    if (!el) {
+        text.value = (text.value || '') + emoji;
+        showEmojiPicker.value = false;
+        return;
+    }
+    const start = el.selectionStart ?? text.value.length;
+    const end = el.selectionEnd ?? text.value.length;
+    const before = text.value.slice(0, start);
+    const after = text.value.slice(end);
+    text.value = before + emoji + after;
+    // move caret after inserted emoji
+    nextTick(() => {
+        try {
+            el.focus();
+            const pos = (before + emoji).length;
+            el.setSelectionRange(pos, pos);
+        } catch (e) {}
+    });
+    showEmojiPicker.value = false;
+}
+
+function onDocumentClick(e: MouseEvent) {
+    const target = e.target as Node | null;
+    if (!showEmojiPicker.value) return;
+    if (emojiPickerRef.value && emojiPickerRef.value.contains(target)) return;
+    // if the click was on the emoji toggle button, keep it open (handled by toggle)
+    const emojiBtn = document.querySelector('[title="Emoji"]');
+    if (emojiBtn && emojiBtn.contains(target)) return;
+    showEmojiPicker.value = false;
+}
+
+onMounted(() => {
+    document.addEventListener('click', onDocumentClick);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('click', onDocumentClick);
+});
 
 function formatSeconds(sec: number) {
     const s = Math.floor(sec % 60)

@@ -135,7 +135,9 @@
         </template>
 
         <template v-else>
-            <div>{{ message?.content }}</div>
+            <div :class="{ 'emoji-large': isEmojiOnly, 'message-text': true }">
+                {{ message?.content }}
+            </div>
         </template>
 
         <div v-if="message?._failed" class="text-xs text-red-500">(failed)</div>
@@ -229,6 +231,23 @@ const displayName = computed(() => {
 
 const downloadName = computed(() => displayName.value || 'audio');
 
+// detect whether the message content is composed only of emoji (or emoji sequences)
+const isEmojiOnly = (() => {
+    try {
+        const txt = String(message?.content || '').trim();
+        if (!txt) return false;
+        // If contains letters or numbers, consider it not emoji-only
+        if (/\p{Letter}|\p{Number}/u.test(txt)) return false;
+        // Remove emoji codepoints and zero-width joiners / variation selectors; if nothing remains it's emoji-only
+        const withoutEmoji = txt
+            .replace(/\p{Extended_Pictographic}/gu, '')
+            .replace(/[\uFE0F\u200D\s]/g, '');
+        return withoutEmoji.length === 0;
+    } catch (e) {
+        return false;
+    }
+})();
+
 // progressDash maps current progressPercent to stroke-dasharray (0..100)
 const progressDash = computed(() => {
     return String(progressPercent.value);
@@ -282,5 +301,16 @@ onBeforeUnmount(() => {
 }
 .play-ring .absolute svg {
     fill: white;
+}
+
+/* Emoji-only messages: show larger emoji for better visibility */
+.emoji-large {
+    font-size: 32px;
+    line-height: 1.1;
+    display: inline-block;
+}
+
+.message-text {
+    word-break: break-word;
 }
 </style>

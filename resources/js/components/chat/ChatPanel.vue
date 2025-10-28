@@ -127,12 +127,16 @@
                 <FileUploader ref="fileUploader" :room-id="props.roomId" />
             </div>
             <div class="flex items-center gap-2">
-                <input
+                <div
                     ref="messageInput"
-                    v-model="text"
-                    class="flex-1 rounded border p-2"
-                    placeholder="Escreve uma mensagem..."
-                />
+                    contenteditable="true"
+                    @input="onContentInput"
+                    @keydown.enter.prevent="onEnter"
+                    class="message-input flex-1 rounded border p-2"
+                    role="textbox"
+                    aria-multiline="true"
+                    data-placeholder="Escreve uma mensagem..."
+                ></div>
 
                 <!-- Emoji picker is attached to the existing emoji SVG below (wrapped in a button) -->
 
@@ -305,48 +309,35 @@
                     </div>
                 </div>
             </div>
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="h-6 w-6 text-gray-500 hover:text-blue-600"
+            <button
+                type="button"
+                class="btn-ghost p-1"
+                @click.prevent="onEmojiIconClick"
+                title="Underline selection / Emoji"
             >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M17.995 3.744v7.5a6 6 0 1 1-12 0v-7.5m-2.25 16.502h16.5"
-                />
-            </svg>
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="h-6 w-6 text-gray-500 hover:text-blue-600"
-            >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z"
-                />
-            </svg>
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="h-6 w-6 text-gray-500 hover:text-blue-600"
-            >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"
-                />
-            </svg>
+                <!-- Simplified Underline 'U' icon to avoid duplicated small U artifact -->
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    class="h-6 w-6 text-gray-500 hover:text-blue-600"
+                >
+                    <!-- Single U path with underline -->
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M7 4v6a5 5 0 0 0 10 0V4"
+                    />
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M5 20h14"
+                    />
+                </svg>
+            </button>
+
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -470,6 +461,14 @@ async function sendPreMade(message: string) {
     // Set the input and send immediately
     text.value = message;
     try {
+        // reflect in contenteditable
+        nextTick(() => {
+            const el = messageInput.value as HTMLDivElement | null;
+            if (el) {
+                el.innerHTML = markedTextToHtml(text.value);
+                updatePlaceholderClass();
+            }
+        });
         await send();
     } catch (e) {
         console.warn('[ChatPanel] failed to send pre-made message', e);
@@ -696,7 +695,7 @@ function triggerUploader() {
 }
 
 // Emoji picker state
-const messageInput = ref<HTMLInputElement | null>(null);
+const messageInput = ref<HTMLDivElement | null>(null);
 const showEmojiPicker = ref(false);
 const emojiPickerRef = ref<HTMLElement | null>(null);
 const emojiQuery = ref('');
@@ -783,27 +782,201 @@ function toggleEmojiPicker() {
 }
 
 function insertEmoji(emoji: string) {
-    // insert emoji at cursor position in the input field
-    const el = messageInput.value as HTMLInputElement | null;
+    // insert emoji at caret inside contenteditable
+    const el = messageInput.value as HTMLDivElement | null;
     if (!el) {
         text.value = (text.value || '') + emoji;
         showEmojiPicker.value = false;
         return;
     }
-    const start = el.selectionStart ?? text.value.length;
-    const end = el.selectionEnd ?? text.value.length;
-    const before = text.value.slice(0, start);
-    const after = text.value.slice(end);
-    text.value = before + emoji + after;
-    // move caret after inserted emoji
-    nextTick(() => {
-        try {
-            el.focus();
-            const pos = (before + emoji).length;
-            el.setSelectionRange(pos, pos);
-        } catch (e) {}
-    });
+    const sel = window.getSelection();
+    if (!sel) {
+        el.focus();
+        el.appendChild(document.createTextNode(emoji));
+    } else {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        const node = document.createTextNode(emoji);
+        range.insertNode(node);
+        // move caret after inserted node
+        range.setStartAfter(node);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+    onContentInput();
     showEmojiPicker.value = false;
+}
+
+/**
+ * Handler wired to the underlined 'U' icon.
+ * - If user has a selection in the input: toggle underline using [u]...[/u]
+ * - If no selection: open/close the emoji picker
+ */
+function onEmojiIconClick() {
+    const el = messageInput.value as HTMLDivElement | null;
+    if (!el) {
+        toggleEmojiPicker();
+        return;
+    }
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+        toggleEmojiPicker();
+        return;
+    }
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+        toggleEmojiPicker();
+        return;
+    }
+    // toggle underline for current selection
+    toggleUnderlineRange(range);
+}
+
+function toggleUnderlineRange(range: Range) {
+    // If the selection is entirely within an existing <u>, unwrap that ancestor.
+    const startContainer = range.startContainer as Node;
+    let node: Node | null = startContainer;
+    while (node && node !== messageInput.value) {
+        if (
+            node.nodeType === Node.ELEMENT_NODE &&
+            (node as Element).tagName === 'U'
+        ) {
+            // unwrap this U element
+            unwrapElement(node as Element);
+            onContentInput();
+            return;
+        }
+        node = node.parentNode;
+    }
+
+    // otherwise wrap selection in <u>
+    try {
+        const wrapper = document.createElement('u');
+        const extracted = range.extractContents();
+        wrapper.appendChild(extracted);
+        range.insertNode(wrapper);
+        // reselect the wrapped content
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        const newRange = document.createRange();
+        newRange.selectNodeContents(wrapper);
+        sel?.addRange(newRange);
+    } catch (e) {
+        // fallback: use execCommand underline
+        try {
+            document.execCommand('underline');
+        } catch (e) {}
+    }
+    onContentInput();
+}
+
+function unwrapElement(el: Element) {
+    const parent = el.parentNode;
+    if (!parent) return;
+    // move children out
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+}
+
+// Handle input event in contenteditable: sync to text.value using [u]...[/u] markers
+function onContentInput() {
+    const el = messageInput.value as HTMLDivElement | null;
+    if (!el) return;
+    text.value = contentEditableToMarkedText(el);
+    updatePlaceholderClass();
+}
+
+function updatePlaceholderClass() {
+    const el = messageInput.value as HTMLDivElement | null;
+    if (!el) return;
+    const txt = (el.textContent || '').trim();
+    if (txt === '') el.classList.add('is-empty');
+    else el.classList.remove('is-empty');
+}
+
+function onEnter(e: KeyboardEvent) {
+    // Enter = send, Shift+Enter = newline
+    if ((e as any).shiftKey) {
+        // insert a newline
+        const sel = window.getSelection();
+        if (!sel) return;
+        const range = sel.getRangeAt(0);
+        const br = document.createElement('br');
+        range.deleteContents();
+        range.insertNode(br);
+        range.setStartAfter(br);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        onContentInput();
+        return;
+    }
+    // otherwise submit
+    send();
+}
+
+function contentEditableToMarkedText(el: HTMLElement) {
+    // Walk nodes and build a string, converting <u>..</u> to [u]..[/u] and <br>/div/p to newlines
+    const walker = document.createTreeWalker(
+        el,
+        NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+        null,
+    );
+    const node: Node | null = walker.currentNode;
+    let out = '';
+
+    const processNode = (n: Node) => {
+        if (n.nodeType === Node.TEXT_NODE) {
+            out += (n as Text).data;
+            return;
+        }
+        if (n.nodeType === Node.ELEMENT_NODE) {
+            const eln = n as Element;
+            const tag = eln.tagName.toLowerCase();
+            if (tag === 'br') {
+                out += '\n';
+                return;
+            }
+            if (tag === 'u') {
+                out += '[u]';
+                for (let i = 0; i < eln.childNodes.length; i++)
+                    processNode(eln.childNodes[i]);
+                out += '[/u]';
+                return;
+            }
+            if (tag === 'div' || tag === 'p') {
+                // process children then newline
+                for (let i = 0; i < eln.childNodes.length; i++)
+                    processNode(eln.childNodes[i]);
+                out += '\n';
+                return;
+            }
+            // default: process children
+            for (let i = 0; i < eln.childNodes.length; i++)
+                processNode(eln.childNodes[i]);
+        }
+    };
+
+    // process direct children of el to preserve structure
+    el.childNodes.forEach((n) => processNode(n));
+    // trim trailing newline
+    if (out.endsWith('\n')) out = out.slice(0, -1);
+    return out;
+}
+
+function markedTextToHtml(marked: string) {
+    // escape and convert [u]...[/u] to <u>...</u>
+    const esc = (s: string) =>
+        s
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    const escaped = esc(marked || '');
+    const withU = escaped.replace(/\[u\]([\s\S]*?)\[\/u\]/gi, '<u>$1</u>');
+    return withU.replace(/\n/g, '<br>');
 }
 
 function onDocumentClick(e: MouseEvent) {
@@ -818,6 +991,8 @@ function onDocumentClick(e: MouseEvent) {
 
 onMounted(() => {
     document.addEventListener('click', onDocumentClick);
+    // initialize placeholder state for contenteditable
+    nextTick(() => updatePlaceholderClass());
 });
 
 onUnmounted(() => {
@@ -1108,6 +1283,8 @@ onUnmounted(() => {
 });
 
 async function send() {
+    // ensure contenteditable latest value is synced
+    onContentInput();
     sendError.value = '';
     // Guard: must have a room id to send
     if (!props.roomId) {
@@ -1125,6 +1302,13 @@ async function send() {
         if (saved) {
             messages.value.push(saved);
             text.value = '';
+            nextTick(() => {
+                const el = messageInput.value as HTMLDivElement | null;
+                if (el) {
+                    el.innerHTML = '';
+                    updatePlaceholderClass();
+                }
+            });
             scrollToBottom(true);
             return;
         }
@@ -1214,6 +1398,13 @@ async function send() {
         }
 
         text.value = '';
+        nextTick(() => {
+            const el = messageInput.value as HTMLDivElement | null;
+            if (el) {
+                el.innerHTML = '';
+                updatePlaceholderClass();
+            }
+        });
         // scroll to bottom when message is sent
         scrollToBottom(true);
     } catch (e) {
@@ -1227,6 +1418,29 @@ async function send() {
 <style scoped>
 .messages {
     max-height: calc(100vh - 200px);
+}
+.message-input {
+    /* occupy available inline space but never force the container to grow */
+    width: 100%;
+    max-width: 95rem; /* keep the earlier requested cap */
+    min-width: 0; /* allow flex children to shrink instead of expanding the container */
+    box-sizing: border-box;
+    /* wrap long/unbroken content instead of enlarging layout */
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+[contenteditable][data-placeholder] {
+    position: relative;
+    min-height: 1.5rem;
+}
+[contenteditable][data-placeholder].is-empty:before {
+    content: attr(data-placeholder);
+    color: #9ca3af; /* gray-400 */
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
 }
 .bg-card {
     background: var(--card-bg);

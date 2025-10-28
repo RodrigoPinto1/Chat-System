@@ -1,5 +1,21 @@
 <template>
-    <div class="message-bubble">
+    <div class="message-bubble relative">
+        <div
+            v-if="isImportant"
+            class="important-badge absolute"
+            title="Importante"
+            aria-hidden="true"
+        >
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                class="h-4 w-4 fill-current"
+            >
+                <path
+                    d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+                />
+            </svg>
+        </div>
         <template v-if="isImage">
             <img
                 :src="message.content"
@@ -135,9 +151,10 @@
         </template>
 
         <template v-else>
-            <div :class="{ 'emoji-large': isEmojiOnly, 'message-text': true }">
-                {{ message?.content }}
-            </div>
+            <div
+                :class="{ 'emoji-large': isEmojiOnly, 'message-text': true }"
+                v-html="formattedContentHtml"
+            ></div>
         </template>
 
         <div v-if="message?._failed" class="text-xs text-red-500">(failed)</div>
@@ -248,6 +265,39 @@ const isEmojiOnly = (() => {
     }
 })();
 
+// Render message content as HTML while safely converting simple BBCode-like tags.
+// Specifically: [u]...[/u] -> <u>...</u>
+const formattedContentHtml = computed(() => {
+    try {
+        const raw = String(message?.content ?? '');
+        if (!raw) return '';
+        // basic HTML escape
+        const esc = (s: string) =>
+            s
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+
+        const escaped = esc(raw);
+        // replace [u]...[/u] with <u>...</u> (non-greedy, dotall)
+        const withUnderline = escaped.replace(
+            /\[u\]([\s\S]*?)\[\/u\]/gi,
+            '<u>$1</u>',
+        );
+        // preserve newlines
+        return withUnderline.replace(/\n/g, '<br>');
+    } catch (e) {
+        return String(message?.content ?? '');
+    }
+});
+
+// important flag (can be persistent (message.important) or optimistic local (message._important))
+const isImportant = computed(
+    () => !!(message?._important || message?.important),
+);
+
 // progressDash maps current progressPercent to stroke-dasharray (0..100)
 const progressDash = computed(() => {
     return String(progressPercent.value);
@@ -310,7 +360,42 @@ onBeforeUnmount(() => {
     display: inline-block;
 }
 
+.important-badge {
+    background: rgba(250, 204, 21, 0.12);
+    color: #b45309; /* amber-700 */
+    border-radius: 9999px;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    transform: translate(8px, -8px);
+    transition:
+        transform 120ms ease,
+        background-color 120ms ease;
+}
+
+.message-bubble.relative .important-badge {
+    top: 0;
+    right: 0;
+}
+
 .message-text {
     word-break: break-word;
+}
+
+/* Dark background for message bubble and constrained width per request */
+.message-bubble {
+    background: #374151; /* gray-700 */
+    color: #f3f4f6; /* gray-100 */
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.625rem;
+    display: inline-block;
+    max-width: 30rem;
+}
+
+.message-bubble .message-text,
+.message-bubble .emoji-large {
+    color: inherit;
 }
 </style>
